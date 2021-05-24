@@ -46,6 +46,7 @@ class KivyLive(MDApp, HotReloaderApp):
 
     def __init__(self, **kwargs):
         super(KivyLive, self).__init__(**kwargs)
+        self.current = None
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connected = False
         self.HEADER_LENGTH = 64
@@ -65,8 +66,7 @@ class KivyLive(MDApp, HotReloaderApp):
 
     def on_rebuild(self, *args):
         if self.connected:
-            print("change")
-            self.root.children[0].current = "home"
+            self.root.children[0].current = self.current if self.root.children[0].current != "ip" else "home"
 
     def thread_server_connection(self, ip):
         toast(f"establishing connection to {ip}:6051", background=self.theme_cls.primary_color) if ":" not in ip else \
@@ -120,7 +120,6 @@ class KivyLive(MDApp, HotReloaderApp):
         try:
             while True:
                 header = self.client_socket.recv(self.HEADER_LENGTH)
-                print(header)
                 if not len(header):
                     Clock.schedule_once(
                         lambda x: toast("SERVER DOWN: Shutting down the connection", background=[1, 0, 0, 1])
@@ -135,6 +134,7 @@ class KivyLive(MDApp, HotReloaderApp):
             Logger.info("SERVER DOWN: Shutting down the connection")
 
     def update_code(self, code_data):
+        self.current = self.root.children[0].current
         # write code
         file = code_data["data"]["file"]
         with open(file, "w") as f:
