@@ -46,7 +46,7 @@ class KivyLive(MDApp, HotReloaderApp):
 
     def __init__(self, **kwargs):
         super(KivyLive, self).__init__(**kwargs)
-        self.current = None
+        self.current = "home"
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connected = False
         self.HEADER_LENGTH = 64
@@ -66,7 +66,7 @@ class KivyLive(MDApp, HotReloaderApp):
 
     def on_rebuild(self, *args):
         if self.connected:
-            self.root.children[0].current = self.current if self.root.children[0].current != "ip" else "home"
+            self.root.children[0].current = self.current
 
     def thread_server_connection(self, ip):
         toast(f"establishing connection to {ip}:6051", background=self.theme_cls.primary_color) if ":" not in ip else \
@@ -94,10 +94,10 @@ class KivyLive(MDApp, HotReloaderApp):
 
     def listen_4_update(self):
         _header = int(self.client_socket.recv(self.HEADER_LENGTH))
-        _iter_chunks = _header // 4096
-        _chunk_remainder = _header % 4096
+        _iter_chunks = _header // 1000
+        _chunk_remainder = _header % 1000
         data = [
-            self.client_socket.recv(4096)
+            self.client_socket.recv(1000)
             for _ in range(_iter_chunks)
             if _iter_chunks >= 1
         ]
@@ -117,24 +117,30 @@ class KivyLive(MDApp, HotReloaderApp):
             ) as f:
                 f.write(load_initial_code[i])
                 f.close()
-        try:
-            while True:
-                header = self.client_socket.recv(self.HEADER_LENGTH)
-                if not len(header):
-                    Clock.schedule_once(
-                        lambda x: toast("SERVER DOWN: Shutting down the connection", background=[1, 0, 0, 1])
-                    )
-                    Logger.info("SERVER DOWN: Shutting down the connection")
-                    break
-                message_length = int(header)
-                code_data = pickle.loads(self.client_socket.recv(message_length))
-                self.update_code(code_data)
-        except:
-            Clock.schedule_once(lambda x: toast("SERVER DOWN: Shutting down the connection", background=[1, 0, 0, 1]))
-            Logger.info("SERVER DOWN: Shutting down the connection")
+        #try:
+        while True:
+            header = self.client_socket.recv(self.HEADER_LENGTH)
+            # if not len(header):
+            #     Clock.schedule_once(
+            #         lambda x: toast("IS SERVER DOWN: Shutting down the connection", background=[1, 0, 0, 1])
+            #     )
+            #     Logger.info("SERVER DOWN: Shutting down the connection")
+            message_length = int(header)
+            __chunks = message_length // 1000
+            __remainder = message_length % 1000
+            code_data = [
+                self.client_socket.recv(1000)
+                for _ in range(__chunks)
+                if __chunks >= 1
+            ]
+            code_data.append(self.client_socket.recv(__remainder))
+            code_data = b"".join(code_data)
+            self.update_code(pickle.loads(code_data))
+        # except:
+        #     Clock.schedule_once(lambda x: toast("SERVER DOWN: Shutting down the connection", background=[1, 0, 0, 1]))
+        #     Logger.info("SERVER DOWN: Shutting down the connection")
 
     def update_code(self, code_data):
-        self.current = self.root.children[0].current
         # write code
         file = code_data["data"]["file"]
         with open(file, "w") as f:
