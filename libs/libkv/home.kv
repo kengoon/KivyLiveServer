@@ -5,3 +5,12 @@
         pos_hint: {"center_x":.5, "center_y": .5}
         radius: [dp(20), dp(7), dp(20), dp(7)]
         md_bg_color: app.theme_cls.primary_color
+        elevation: 30
+        on_release:
+            root.print_me("jdjdjd")
+
+        MDCard:
+            size_hint: .3, .5
+            MDLabel:
+                text: "2"
+                halign: "center"
