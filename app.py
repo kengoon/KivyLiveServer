@@ -343,17 +343,17 @@ class FleetApp(App):
             return toast(
                 "YOUR PORT ADDRESS MUST BE 1000 AND ABOVE",
                 bold=True, text_color=self.PURE_RED)
-        if "open filechooser" == self.protocol_box.ids.folder_name.text:
+        if self.protocol_box.ids.folder_name.text == "open filechooser":
             return toast(
                 "SELECT A FOLDER BEFORE PROCEEDING",
                 bold=True, text_color=self.PURE_RED)
         ip_address = self.protocol_box.ids.ip.text
         port = int(self.protocol_box.ids.port.text)
         self.log_black_box(f"requesting to open port {port} over firewall.....")
-        if not shell_call(["which", "ufw"], stderr=STDOUT, stdout=DEVNULL):
-            if shell_call(["pkexec", "ufw", "allow", f"{port}/tcp"], stderr=STDOUT, stdout=DEVNULL):
-                self.log_black_box(f"request denied.....")
-                return toast(f"FAILED TO OPEN PORT {port} OVER FIREWALL", bold=True, text_color=self.PURE_RED)
+        if not shell_call(["which", "ufw"], stderr=STDOUT, stdout=DEVNULL) and \
+                shell_call(["pkexec", "ufw", "allow", f"{port}/tcp"], stderr=STDOUT, stdout=DEVNULL):
+            self.log_black_box("request denied.....")
+            return toast(f"FAILED TO OPEN PORT {port} OVER FIREWALL", bold=True, text_color=self.PURE_RED)
         self.log_black_box("request accepted....")
         self.start_server_button.disabled = True
         self.protocol_box.disabled = True
@@ -376,10 +376,10 @@ class FleetApp(App):
         ip_address = self.protocol_box.ids.ip.text
         port = int(self.protocol_box.ids.port.text)
         self.log_black_box(f"requesting to close port {port} over firewall.....")
-        if not shell_call(["which", "ufw"], stderr=STDOUT, stdout=DEVNULL):
-            if shell_call(["pkexec", "ufw", "deny", f"{port}/tcp"], stderr=STDOUT, stdout=DEVNULL):
-                self.log_black_box("request denied......")
-                return toast(f"FAILED TO CLOSE {port} OVER FIREWALL", bold=True, text_color=self.PURE_RED)
+        if not shell_call(["which", "ufw"], stderr=STDOUT, stdout=DEVNULL) and \
+                shell_call(["pkexec", "ufw", "deny", f"{port}/tcp"], stderr=STDOUT, stdout=DEVNULL):
+            self.log_black_box("request denied......")
+            return toast(f"FAILED TO CLOSE {port} OVER FIREWALL", bold=True, text_color=self.PURE_RED)
         self.log_black_box("request accepted.......")
         self.start_server_button.disabled = False
         self.protocol_box.disabled = False

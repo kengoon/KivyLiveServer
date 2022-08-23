@@ -1,6 +1,6 @@
 echo copying neccessary files......
 mkdir exe_build
-mkdir exe_build/C
+#mkdir exe_build/C
 cp main.spec exe_build/main.spec
 cp main.py exe_build/main.py
 cp -r tools exe_build/tools

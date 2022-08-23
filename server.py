@@ -46,13 +46,13 @@ class KivyLiveServer:
         except OverflowError as e:
             try:
                 gui.stop_server(error=str(e).upper().replace("BIND()", "PORT NUMBER TOO LONG"))
-            except AttributeError:
-                raise OverflowError(str(e))
+            except AttributeError as exc:
+                raise OverflowError(str(e)) from exc
         except OSError as e:
             try:
                 gui.stop_server(error=f"PORT NUMBER {port} IS ALREADY IN USE")
-            except AttributeError:
-                raise OSError(str(e))
+            except AttributeError as exc:
+                raise OSError(str(e)) from exc
         if not gui:
             print(
                 f"{datetime.now().strftime('%d/%m/%Y %H:%M:%S')} : "
@@ -145,7 +145,7 @@ class KivyLiveServer:
                 code_message = {"address": f"{address[0]}:{address[1]}",
                                 "data": pickle.loads(client_socket.recv(message_length))}
                 self.update_code_file(code_message, client_socket)
-            except:
+            except Exception:
                 self.clean(client_socket, address)
                 break
 
@@ -169,9 +169,7 @@ class KivyLiveServer:
                 self.clean(client[1], client[0], process)
 
     def run_server(self):
-        while True:
-            if self.gui.kill_server_thread:
-                break
+        while not self.gui.kill_server_thread:
             self.recv_conn()
 
 
