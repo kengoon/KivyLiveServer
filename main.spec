@@ -88,11 +88,12 @@ with open("binaries.json") as f:
 
 from os import listdir, remove, rmdir
 from os.path import exists
+from shutil import rmtree
 files = listdir("dist/Fleet")
 for file in files:
     if ".so" in file and file not in bin:
         remove(f"dist/Fleet/{file}")
         print(f"removed {file}")
 if exists("dist/Fleet/gi_typelibs"):
-    rmdir("dist/Fleet/gi_typelibs")
+    rmtree("dist/Fleet/gi_typelibs")
     print("removed 'dist/Fleet/gi_typelibs'")
