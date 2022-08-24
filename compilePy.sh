@@ -1,13 +1,14 @@
 echo copying neccessary files......
 mkdir exe_build
 #mkdir exe_build/C
-cp main.spec exe_build/main.spec
-cp main.py exe_build/main.py
-cp -r tools exe_build/tools
-cp -r plyer exe_build/plyer
-cp -r assets exe_build/assets
-cp hover_behavior.py exe_build/hover_behavior.py
-cp toast.py exe_build/toast.py
+cp main.spec exe_build/
+cp main.py exe_build/
+cp -r tools exe_build/
+cp -r plyer exe_build/
+cp -r assets exe_build/
+cp hover_behavior.py exe_build/
+cp binaries.json exe_build/
+cp toast.py exe_build/
 #echo cythonizing server.py to server.c .....
 #cython server.py -o exe_build/C/ -3
 #echo cythonizing app.y to app.c ......

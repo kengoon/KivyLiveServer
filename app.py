@@ -1,11 +1,16 @@
 import contextlib
+from multiprocessing import Event, Process
 from subprocess import STDOUT, DEVNULL, call as shell_call
 import socket
 from datetime import datetime
 from os.path import join, expanduser
-if hasattr(__import__(__name__), "__compiled__"):
-    from os import environ
-    environ["KIVY_NO_CONSOLELOG"] = "1"
+
+from PIL import Image
+
+# if hasattr(__import__(__name__), "__compiled__"):
+#     from os import environ
+#
+#     environ["KIVY_NO_CONSOLELOG"] = "1"
 from threading import Thread
 
 from kivy.animation import Animation
@@ -24,9 +29,9 @@ from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.factory import Factory
-from kivy.graphics import RoundedRectangle
+from kivy.uix.modalview import ModalView
 from kivy.storage.jsonstore import JsonStore
-
+from kivy import platform
 from plyer import filechooser
 from server import KivyLiveServer
 from kivy.uix.dropdown import DropDown
@@ -206,6 +211,31 @@ Builder.load_string("""
         on_enter: self.color = "red"
         on_release:
             app.stop_server(stop_app=True)
+<Dialog@BoxLayout>:
+    orientation: "vertical"
+    size_hint: None, None
+    size: self.minimum_size
+    spacing: dp(40)
+    Label:
+        text: "Minimize To System Tray?"
+    LineButton:
+        text: "YES MINIMIZE"
+        size_hint: None, None
+        size: self.texture_size
+        color: app.GREEN
+        ripple_color: app.GREEN
+        padding: dp(50), dp(20)
+        pos_hint: {"center_x": .5}
+        on_release: app.minimize_app_to_tray()
+    LineButton:
+        text: "NO CLOSE APPLICATION"
+        size_hint: None, None
+        color: app.RED
+        ripple_color: app.RED
+        size: self.texture_size
+        padding: dp(50), dp(20)
+        pos_hint: {"center_x": .5}
+        on_release: app.stop_server(stop_app=True, dialog_open=True)
 """, filename="main.kv", rulesonly=True)
 title_bar = Factory.TitleBar()
 Window.set_custom_titlebar(title_bar)
@@ -241,6 +271,11 @@ class LineButton(TouchRippleButtonBehavior, Label):
 class FleetApp(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.quit_app = False
+        self.raise_window = False
+        self.p: Process = None
+        self.raise_flag = None
+        self.quit_flag = None
         self.title = "Fleet"
         self.server_started = False
         self.kill_server_thread = False
@@ -253,6 +288,14 @@ class FleetApp(App):
         except KeyError:
             self.resolve_cache_path = None
         self.thread = None
+        self.dialog = ModalView(
+            size_hint=(None, None),
+            size=(dp(300), dp(256)),
+            background="",
+            background_color=[0, 0, 0, 0],
+            overlay_color=[0, 0, 0, .8]
+        )
+        self.dialog.add_widget(Factory.Dialog())
         self.anim = Animation(opacity=.2) + Animation(opacity=1)
         self.anim.repeat = True
         self.start_server_button = LineButton(
@@ -350,7 +393,7 @@ class FleetApp(App):
         ip_address = self.protocol_box.ids.ip.text
         port = int(self.protocol_box.ids.port.text)
         self.log_black_box(f"requesting to open port {port} over firewall.....")
-        if not shell_call(["which", "ufw"], stderr=STDOUT, stdout=DEVNULL) and \
+        if platform == "linux" and not shell_call(["which", "ufw"], stderr=STDOUT, stdout=DEVNULL) and \
                 shell_call(["pkexec", "ufw", "allow", f"{port}/tcp"], stderr=STDOUT, stdout=DEVNULL):
             self.log_black_box("request denied.....")
             return toast(f"FAILED TO OPEN PORT {port} OVER FIREWALL", bold=True, text_color=self.PURE_RED)
@@ -366,17 +409,19 @@ class FleetApp(App):
         self.server_started = True
 
     @mainthread
-    def stop_server(self, error: str = None, stop_app: bool = False):
-        if not self.server_started:
-            if stop_app:
-                self.stop()
+    def stop_server(self, error: str = None, stop_app: bool = False, dialog_open: bool = False):
+        if not self.server_started and stop_app:
+            self.stop()
+            return
+        elif stop_app and not dialog_open:
+            self.dialog.open()
             return
         if error:
             toast(error.upper(), bold=True, text_color=self.PURE_RED)
         ip_address = self.protocol_box.ids.ip.text
         port = int(self.protocol_box.ids.port.text)
         self.log_black_box(f"requesting to close port {port} over firewall.....")
-        if not shell_call(["which", "ufw"], stderr=STDOUT, stdout=DEVNULL) and \
+        if platform == "linux" and not shell_call(["which", "ufw"], stderr=STDOUT, stdout=DEVNULL) and \
                 shell_call(["pkexec", "ufw", "deny", f"{port}/tcp"], stderr=STDOUT, stdout=DEVNULL):
             self.log_black_box("request denied......")
             return toast(f"FAILED TO CLOSE {port} OVER FIREWALL", bold=True, text_color=self.PURE_RED)
@@ -411,5 +456,58 @@ class FleetApp(App):
     def log_black_box(self, message):
         self.black_box.data.append({"text": message})
 
+    def minimize_app_to_tray(self):
+        self.dialog.dismiss()
+        Window.hide()
+
+        def create_system_tray(raise_flag, quit_flag):
+            from pystray import Icon, Menu, MenuItem
+            img = Image.open("assets/images/kivy-icon-64.png")
+            menu = Menu(
+                MenuItem("Open Fleet", lambda: raise_flag.set()),
+                MenuItem("Quit Fleet", lambda: quit_flag.set())
+            )
+            icon = Icon(icon=img, name="Fleet", title="Fleet", menu=menu)
+            icon.run()
+        self.quit_app = False
+        self.raise_window = False
+        self.raise_flag = Event()
+        self.quit_flag = Event()
+        self.p = Process(target=create_system_tray, args=(self.raise_flag, self.quit_flag))
+        self.p.start()
+
+        def check_process_window_raised():
+            while not self.raise_flag.is_set():
+                if self.quit_app:
+                    return
+                continue
+            self.raise_window = True
+            self.raise_app_window()
+
+        Thread(target=check_process_window_raised).start()
+
+        def check_process_quit_app():
+            while not self.quit_flag.is_set():
+                if self.raise_window:
+                    return
+                continue
+            self.quit_app = True
+            self.terminate_app()
+
+        Thread(target=check_process_quit_app).start()
+
+    def terminate_process(self):
+        self.p.terminate()
+        self.p.kill()
+        self.p.join()
+
+    def terminate_app(self):
+        self.terminate_process()
+        self.stop_server(stop_app=True, dialog_open=True)
+
+    @mainthread
+    def raise_app_window(self):
+        self.terminate_process()
+        Window.show()
 
 # FleetApp().run()
