@@ -34,7 +34,7 @@ a = Analysis(
 )
 
 a.datas = [data for data in a.datas if not data[0].startswith("share")]
-a.binaries = [bin for bin in a.binaries if not bin[0].startswith("gst_plugins") and not bin[0].startswith("lib/") \
+a.binaries = [bin for bin in a.binaries if not bin[0].startswith("gst_plugins") \
 and not bin[0].startswith("gi_typelibs") and not bin[0].startswith("libgst") and not bin[0].startswith("libav") \
 and not bin[0].startswith("libb") and not bin[0].startswith("libv") and not bin[0].startswith("libw") \
 and not bin[0].startswith("libfl") and not bin[0].startswith("gi_typelibs") and not bin[0].startswith("libk") \

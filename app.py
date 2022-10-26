@@ -7,10 +7,10 @@ from os.path import join, expanduser
 
 from PIL import Image
 
-# if hasattr(__import__(__name__), "__compiled__"):
-#     from os import environ
-#
-#     environ["KIVY_NO_CONSOLELOG"] = "1"
+if hasattr(__import__(__name__), "__compiled__"):
+    from os import environ
+
+    environ["KIVY_NO_CONSOLELOG"] = "1"
 from threading import Thread
 
 from kivy.animation import Animation
@@ -83,6 +83,7 @@ Builder.load_string("""
     text_size: self.width, None
     color: get_color_from_hex("#00C853")
     bold: True
+    markup: True
     font_name: "Ubuntu"
 
 <ButtonLabel@ButtonBehavior+Label>:
@@ -277,6 +278,7 @@ class FleetApp(App):
         self.raise_flag = None
         self.quit_flag = None
         self.title = "Fleet"
+        self.server_flag = Event()  # checking access granted to firewall while quitting to remove tray icon
         self.server_started = False
         self.kill_server_thread = False
         self.RED = get_color_from_hex("#C51162")
@@ -392,10 +394,11 @@ class FleetApp(App):
                 bold=True, text_color=self.PURE_RED)
         ip_address = self.protocol_box.ids.ip.text
         port = int(self.protocol_box.ids.port.text)
-        self.log_black_box(f"requesting to open port {port} over firewall.....")
+        self.log_black_box(f"[color=#ffffff]requesting to open port {port} over firewall.....[/color]")
         if platform == "linux" and not shell_call(["which", "ufw"], stderr=STDOUT, stdout=DEVNULL) and \
                 shell_call(["pkexec", "ufw", "allow", f"{port}/tcp"], stderr=STDOUT, stdout=DEVNULL):
-            self.log_black_box("request denied.....")
+            self.log_black_box("[color=#ff0000]request denied.....[/color]")
+            self.log_black_box("[color=#ffff00][size=18]Is `ufw` installed?[/size][/color]")
             return toast(f"FAILED TO OPEN PORT {port} OVER FIREWALL", bold=True, text_color=self.PURE_RED)
         self.log_black_box("request accepted....")
         self.start_server_button.disabled = True
@@ -407,12 +410,13 @@ class FleetApp(App):
         self.thread = Thread(target=KivyLiveServer, args=(self, ip_address, port, join(self.user_data_dir, folder)))
         self.thread.start()
         self.server_started = True
+        self.server_flag.clear()
 
     @mainthread
     def stop_server(self, error: str = None, stop_app: bool = False, dialog_open: bool = False):
         if not self.server_started and stop_app:
             self.stop()
-            return
+            return True
         elif stop_app and not dialog_open:
             self.dialog.open()
             return
@@ -420,11 +424,13 @@ class FleetApp(App):
             toast(error.upper(), bold=True, text_color=self.PURE_RED)
         ip_address = self.protocol_box.ids.ip.text
         port = int(self.protocol_box.ids.port.text)
-        self.log_black_box(f"requesting to close port {port} over firewall.....")
-        if platform == "linux" and not shell_call(["which", "ufw"], stderr=STDOUT, stdout=DEVNULL) and \
-                shell_call(["pkexec", "ufw", "deny", f"{port}/tcp"], stderr=STDOUT, stdout=DEVNULL):
-            self.log_black_box("request denied......")
-            return toast(f"FAILED TO CLOSE {port} OVER FIREWALL", bold=True, text_color=self.PURE_RED)
+        self.log_black_box(f"[color=#ffffff]requesting to open port {port} over firewall.....[/color]")
+        if platform == "linux" and shell_call(["pkexec", "ufw", "deny", f"{port}/tcp"], stderr=STDOUT, stdout=DEVNULL):
+            self.log_black_box("[color=#ff0000]request denied.....[/color]")
+            self.log_black_box("[color=#ffff00][size=18]Is `ufw` installed?[/size][/color]")
+            toast(f"FAILED TO CLOSE {port} OVER FIREWALL", bold=True, text_color=self.PURE_RED)
+            self.server_flag.set()
+            return
         self.log_black_box("request accepted.......")
         self.start_server_button.disabled = False
         self.protocol_box.disabled = False
@@ -441,8 +447,10 @@ class FleetApp(App):
         self.kill_server_thread = False
         self.log_black_box(f"{datetime.now().strftime('%d/%m/%Y %H:%M:%S')} : server stopped")
         self.server_started = False
+        self.server_flag.set()
         if stop_app:
             self.stop()
+            return True
 
     def choose_write_location(self, button):
         filechooser.choose_dir(
@@ -469,6 +477,7 @@ class FleetApp(App):
             )
             icon = Icon(icon=img, name="Fleet", title="Fleet", menu=menu)
             icon.run()
+
         self.quit_app = False
         self.raise_window = False
         self.raise_flag = Event()
@@ -477,22 +486,24 @@ class FleetApp(App):
         self.p.start()
 
         def check_process_window_raised():
-            while not self.raise_flag.is_set():
-                if self.quit_app:
-                    return
-                continue
+            self.raise_flag.wait()
+            if self.quit_app:
+                return
             self.raise_window = True
+            self.quit_flag.set()
             self.raise_app_window()
 
         Thread(target=check_process_window_raised).start()
 
         def check_process_quit_app():
-            while not self.quit_flag.is_set():
-                if self.raise_window:
-                    return
-                continue
+            self.quit_flag.wait()
+            if self.raise_window:
+                return
+            if not self.terminate_app():
+                self.quit_flag.clear()
+                check_process_quit_app()
             self.quit_app = True
-            self.terminate_app()
+            self.raise_flag.set()
 
         Thread(target=check_process_quit_app).start()
 
@@ -502,8 +513,13 @@ class FleetApp(App):
         self.p.join()
 
     def terminate_app(self):
-        self.terminate_process()
         self.stop_server(stop_app=True, dialog_open=True)
+        self.server_flag.wait()
+        if not self.server_started:
+            self.terminate_process()
+            return True
+        self.server_flag.clear()
+        return False
 
     @mainthread
     def raise_app_window(self):

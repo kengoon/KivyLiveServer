@@ -24,3 +24,6 @@ nuitka3 --module server.py --no-pyi-file --remove-output
 mv server.cpython* exe_build/
 
 pyinstaller exe_build/main.spec --noconfirm
+echo cleaning build
+rm -rf exe_build
+echo Application Successfully Built..
